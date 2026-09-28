@@ -7,3 +7,4 @@
 .env
 *.zip
 local-lab/.env
+local-lab/jenkins/certs/*.crt

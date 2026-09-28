@@ -10,9 +10,11 @@ ZIP'i çıkartıp `loadtest-demo` klasöründe PowerShell açın ve Docker Deskt
 powershell -ExecutionPolicy Bypass -File .\scripts\setup-and-publish.ps1
 ```
 
-Script, bilgisayarda yoksa Git for Windows ve GitHub CLI'yi `winget` ile kurmayı dener; GitHub hesabına tarayıcıda bir kez giriş yaptırır. Oturumun **TahaKilicoglu** hesabına ait olduğunu denetler. Yeni, **herkese açık** `java8-jenkins-local-lab` reposunu oluşturur, bu proje kaynaklarını commit edip push eder. Aynı adla repo zaten varsa ve yerel `origin` bu repoyu gösteriyorsa yeni commit'i push eder; başka bir mevcut repo üzerine sessizce yazmaz. İsterseniz script parametresiyle farklı ad seçebilirsiniz: `-RepoName benim-repom`.
+Kodları GitHub'a **önceden push etmiş olmanız gerekir**; repoda `main` dalı ve `Jenkinsfile` bulunmalıdır. Script, varsa yerel `origin` adresini kullanır; yoksa `https://github.com/TahaKilicoglu/java8-jenkins-local-lab.git` adresini varsayar. Repo adresiniz farklıysa `-RepoUrl https://github.com/TahaKilicoglu/REPO.git` parametresini verin. Repo herkese açık olmalıdır; Jenkins kimlik bilgisi olmadan Git üzerinden okuyacaktır. Script GitHub CLI (`gh`) veya `winget` kullanmaz; GitHub hesabına giriş yapmaz, commit ya da push oluşturmaz.
 
 Script ardından `local-lab/.env` içinde rastgele yerel DB ve Jenkins admin parolası üretir, Jenkins/PostgreSQL/Elasticsearch/Kibana/Filebeat container'larını başlatır ve ilk Jenkins build'ini kuyruğa almayı dener. Jenkins job'ı ve `orders-db-app` DB credential'ı Configuration as Code ile otomatik oluşturulur. İlk image build'i internet hızına göre zaman alır.
+
+Şirket ağı `updates.jenkins.io` HTTPS trafiğini kendi sertifikasıyla denetliyorsa Jenkins eklenti kurulumunda `PKIX path building failed` hatası görülebilir. Kurulum betiği Windows'un güvenilir kök sertifikalarını (özel anahtar içermez) yerel `local-lab/jenkins/certs/` dizinine aktarır; Dockerfile bu sertifikaları Jenkins'in sistem ve Java truststore'una ekleyip eklenti kurulumunu yeniden dener. Sertifika dosyaları `.gitignore` kapsamındadır; GitHub'a gönderilmez. Windows'un da güvenmediği bir sertifika varsa önce güvenilir kaynaktan alınan kurumsal kök sertifikayı Windows'un Trusted Root Certification Authorities deposuna eklemek gerekir.
 
 | Adres | Görev |
 | --- | --- |

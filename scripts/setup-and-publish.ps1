@@ -1,76 +1,39 @@
-param([string]$RepoName = 'java8-jenkins-local-lab')
+﻿param([string]$RepoUrl = '')
 $ErrorActionPreference = 'Stop'
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Set-Location $projectRoot
-$slug = "TahaKilicoglu/$RepoName"
-$repoUrl = "https://github.com/$slug.git"
 
-function Resolve-Executable([string]$name, [string]$packageId, [string[]]$locations) {
-    $found = Get-Command $name -ErrorAction SilentlyContinue
-    if ($found) { return $found.Source }
-    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
-        throw "$name bulunamadı. Git for Windows ve GitHub CLI kurup tekrar çalıştırın."
+if (-not $RepoUrl) {
+    $git = Get-Command git -ErrorAction SilentlyContinue
+    if ($git -and (Test-Path '.git') -and (@(& git remote) -contains 'origin')) {
+        $RepoUrl = (& git remote get-url origin).Trim()
+    } else {
+        $RepoUrl = 'https://github.com/TahaKilicoglu/java8-jenkins-local-lab.git'
     }
-    Write-Host "$name yükleniyor..."
-    & winget install --id $packageId --exact --source winget --accept-source-agreements --accept-package-agreements
-    if ($LASTEXITCODE -ne 0) { throw "$name kurulamadı." }
-    foreach ($path in $locations) { if (Test-Path $path) { return $path } }
-    $found = Get-Command $name -ErrorAction SilentlyContinue
-    if ($found) { return $found.Source }
-    throw "$name kuruldu ancak bu oturumda bulunamadı. PowerShell'i yeniden açıp tekrar çalıştırın."
 }
-
-$git = Resolve-Executable 'git' 'Git.Git' @('C:\Program Files\Git\cmd\git.exe')
-$gh = Resolve-Executable 'gh' 'GitHub.cli' @('C:\Program Files\GitHub CLI\gh.exe')
-$env:PATH = "$(Split-Path $git);$(Split-Path $gh);$env:PATH"
+$repoMatch = [regex]::Match($RepoUrl.Trim(), '^(?:https://github\.com/|git@github\.com:|ssh://git@github\.com/)(TahaKilicoglu/[A-Za-z0-9._-]+?)(?:\.git)?/?$', 'IgnoreCase')
+if (-not $repoMatch.Success) { throw 'GitHub adresi beklenen biçimde değil. -RepoUrl https://github.com/TahaKilicoglu/REPO.git kullanın.' }
+$slug = $repoMatch.Groups[1].Value
+$repoUrl = "https://github.com/$slug.git"
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { throw 'Docker Desktop bulunamadı.' }
-& docker info *> $null
-if ($LASTEXITCODE -ne 0) { throw 'Docker Desktop açık ve Linux containers modunda olmalı.' }
-
-& $gh auth status *> $null
-if ($LASTEXITCODE -ne 0) {
-    Write-Host 'GitHub hesabına tarayıcıda bir kez giriş yapın.'
-    & $gh auth login --web --git-protocol https
-    if ($LASTEXITCODE -ne 0) { throw 'GitHub oturumu açılamadı.' }
+function Invoke-DockerCommand([string[]]$DockerArguments, [switch]$Quiet) {
+    $previousPreference = $ErrorActionPreference
+    try {
+        # Windows PowerShell 5.1 turns native stderr warnings into errors under Stop.
+        $ErrorActionPreference = 'Continue'
+        if ($Quiet) {
+            & docker @DockerArguments *> $null
+        } else {
+            & docker @DockerArguments 2>&1 | ForEach-Object { Write-Host $_ }
+        }
+        return $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousPreference
+    }
 }
-$account = & $gh api user --jq .login
-if ($LASTEXITCODE -ne 0 -or $account.Trim() -ine 'TahaKilicoglu') {
-    throw "GitHub oturumu beklenen TahaKilicoglu hesabına ait değil: $account"
-}
-
-if (-not (Test-Path '.git')) {
-    & $git init -b main
-    if ($LASTEXITCODE -ne 0) { throw 'Git başlatılamadı.' }
-}
-& $git config user.name 'TahaKilicoglu'
-& $git config user.email 'TahaKilicoglu@users.noreply.github.com'
-& $git add -A
-& $git ls-files --error-unmatch local-lab/.env 2>$null | Out-Null
-if ($LASTEXITCODE -eq 0) { throw 'local-lab/.env Git tarafından izleniyor; parolalar yayımlanmadan önce dosyayı Git takibinden çıkarın.' }
-& $git diff --cached --check
-if ($LASTEXITCODE -ne 0) { throw 'Git diff kontrolü başarısız.' }
-& $git diff --cached --quiet
-if ($LASTEXITCODE -ne 0) {
-    & $git commit -m 'Add local Jenkins Java 8 deployment lab'
-    if ($LASTEXITCODE -ne 0) { throw 'Git commit oluşturulamadı.' }
-}
-
-& $gh repo view $slug --json name *> $null
-$repoExists = ($LASTEXITCODE -eq 0)
-& $git remote get-url origin 2>$null | Out-Null
-$hasOrigin = ($LASTEXITCODE -eq 0)
-if ($repoExists) {
-    if (-not $hasOrigin) { throw "$slug zaten mevcut. Üzerine otomatik yazılmadı. Yeni RepoName seçin veya remote'u inceleyin." }
-    $originUrl = & $git remote get-url origin
-    if ($originUrl.Trim() -ne $repoUrl) { throw "Mevcut origin farklı: $originUrl" }
-    & $git push -u origin main
-    if ($LASTEXITCODE -ne 0) { throw 'Git push başarısız.' }
-} else {
-    if ($hasOrigin) { throw 'origin remote zaten var; önce hangi repository olduğunu kontrol edin.' }
-    Write-Host "$slug adlı herkese açık demo repository oluşturuluyor. Kaynak kod yayımlanacak."
-    & $gh repo create $slug --public --source . --remote origin --push
-    if ($LASTEXITCODE -ne 0) { throw 'GitHub repo oluşturma veya push başarısız.' }
-}
+if ((Invoke-DockerCommand -DockerArguments @('info') -Quiet) -ne 0) { throw 'Docker Desktop açık ve Linux containers modunda olmalı.' }
+Write-Host "Jenkins için GitHub deposu: $repoUrl"
+Write-Host 'Bu betik GitHub CLI kullanmaz; commit veya push oluşturmaz.'
 
 $envPath = Join-Path $projectRoot 'local-lab\.env'
 if (-not (Test-Path $envPath)) {
@@ -103,9 +66,30 @@ if (-not (Test-Path $envPath)) {
     if (-not $existingDb) { throw 'local-lab/.env içinde LAB_DB_PASSWORD eksik.' }
 }
 
+$certDir = Join-Path $projectRoot 'local-lab\jenkins\certs'
+New-Item -ItemType Directory -Path $certDir -Force | Out-Null
+$trustedRoots = @{}
+foreach ($rootStore in @('Cert:\CurrentUser\Root', 'Cert:\LocalMachine\Root')) {
+    foreach ($certificate in @(Get-ChildItem -Path $rootStore -ErrorAction SilentlyContinue)) {
+        if ($certificate.NotAfter -gt (Get-Date) -and $certificate.Thumbprint) {
+            $trustedRoots[$certificate.Thumbprint] = $certificate
+        }
+    }
+}
+if ($trustedRoots.Count -eq 0) { throw 'Windows güvenilir kök sertifikaları okunamadı.' }
+foreach ($thumbprint in $trustedRoots.Keys) {
+    $certFile = Join-Path $certDir "windows-$thumbprint.crt"
+    if (-not (Test-Path $certFile)) {
+        $base64 = [Convert]::ToBase64String($trustedRoots[$thumbprint].RawData, [Base64FormattingOptions]::InsertLineBreaks)
+        $pem = "-----BEGIN CERTIFICATE-----`r`n$base64`r`n-----END CERTIFICATE-----`r`n"
+        [IO.File]::WriteAllText($certFile, $pem, [Text.Encoding]::ASCII)
+    }
+}
+Write-Host "$($trustedRoots.Count) Windows güvenilir kök sertifikası Jenkins image'ına aktarılacak (yalnız public sertifika; Git dışında)."
+
 $compose = Join-Path $projectRoot 'local-lab\compose.yml'
-& docker compose --env-file $envPath -f $compose --profile observability up -d --build
-if ($LASTEXITCODE -ne 0) { throw 'Docker Compose başlatılamadı.' }
+$composeArgs = @('compose', '--env-file', $envPath, '-f', $compose, '--profile', 'observability', 'up', '-d', '--build')
+if ((Invoke-DockerCommand -DockerArguments $composeArgs) -ne 0) { throw 'Docker Compose başlatılamadı.' }
 
 $values = @{}
 Get-Content $envPath | ForEach-Object {

@@ -1,6 +1,6 @@
 # GitHub push sonrası otomatik Jenkins build ve yerel mikroservis deploy'u
 
-Bu proje için tek komut `powershell -ExecutionPolicy Bypass -File .\scripts\setup-and-publish.ps1`. Scriptin ilk kullanımda GitHub hesabına giriş açması gerekir; bu oturum GitHub hesabına bağlı olmadığından ilk push'u kullanıcının kendi bilgisayarındaki kimlik doğrulamasıyla yapar. Sonraki her `git push origin main` için Jenkins, GitHub'ı yaklaşık dakikada bir yoklar. GitHub'dan `localhost` adresine webhook gelmez. Yerel makine kapalıyken yeni commit birikir; Jenkins tekrar açıldığında son `main` durumunu kontrol eder.
+Bu proje için tek komut `powershell -ExecutionPolicy Bypass -File .\scripts\setup-and-publish.ps1`. Kodunuzu önce herkese açık GitHub reposundaki `main` dalına push edin; `Jenkinsfile` de repoda olmalıdır. Script GitHub CLI kullanmaz ve push yapmaz. Yerel `origin` varsa adresini kullanır, yoksa `TahaKilicoglu/java8-jenkins-local-lab` reposunu varsayar; farklı repo için `-RepoUrl https://github.com/TahaKilicoglu/REPO.git` verin. Sonraki her `git push origin main` için Jenkins, GitHub'ı yaklaşık dakikada bir yoklar. GitHub'dan `localhost` adresine webhook gelmez. Yerel makine kapalıyken yeni commit birikir; Jenkins tekrar açıldığında son `main` durumunu kontrol eder.
 
 ## 1. Ne nerede çalışıyor?
 
@@ -17,7 +17,7 @@ Jenkins ve uygulama iki ayrı Java sürümü kullanır. Jenkins controller Java 
 
 ## 2. GitHub ve ilk kurulum
 
-PowerShell scripti `gh auth login --web` ile tarayıcıda GitHub hesabını doğrular. Hesabın `TahaKilicoglu` olup olmadığını kontrol eder; yanlış hesaba proje göndermeyi durdurur. Henüz yoksa önerilen adıyla **herkese açık** bir repository açar, `.gitignore` ile yerel parola dosyasını ve build/log çıktılarını dışarıda tutarak commit ve push yapar. Adı önceden alınmış veya başka bir `origin` tanımlıysa var olan kodun üzerine kendiliğinden yazmaz. Sonra `local-lab/.env` içinde iki rastgele parola üretir: `LAB_DB_PASSWORD` PostgreSQL ve Jenkins DB credential'ı için, `JENKINS_ADMIN_PASSWORD` Jenkins admin girişi için.
+PowerShell scripti `TahaKilicoglu` hesabındaki repo adresini yerel `origin` üzerinden okur veya varsayılan adresi kullanır; gerekli durumda `-RepoUrl` ile açıkça belirtebilirsiniz. GitHub'a yazmaz. Ardından `local-lab/.env` içinde iki rastgele parola üretir: `LAB_DB_PASSWORD` PostgreSQL ve Jenkins DB credential'ı için, `JENKINS_ADMIN_PASSWORD` Jenkins admin girişi için. Yerel parola dosyasını `.gitignore` ile Git dışında tutun.
 
 Repository herkese açıktır çünkü Jenkins GitHub'ı kimlik bilgisi olmadan okuyabilir. Özel repo tercih edilecekse GitHub'da özel repo oluşturup Jenkins SCM erişimine ayrıca token/SSH credential eklemek ve Job DSL'de credential ID belirtmek gerekir. Bu sürüm, tek komutla deneyebilmek için açık repo yolunu seçer; şifreler `.env` içindedir ve Git'e eklenmez.
 
