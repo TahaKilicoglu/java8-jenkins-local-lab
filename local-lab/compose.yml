@@ -1,0 +1,69 @@
+name: loadtest-lab
+services:
+  jenkins:
+    build: ./jenkins
+    user: root
+    ports: ["127.0.0.1:8090:8080"]
+    volumes:
+      - jenkins-home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      JAVA_OPTS: -Djenkins.install.runSetupWizard=false
+      JENKINS_ADMIN_PASSWORD: ${JENKINS_ADMIN_PASSWORD:?Set JENKINS_ADMIN_PASSWORD in local-lab/.env}
+      LAB_DB_PASSWORD: ${LAB_DB_PASSWORD:?Set LAB_DB_PASSWORD in local-lab/.env}
+      GITHUB_REPO_URL: ${GITHUB_REPO_URL:?Set GITHUB_REPO_URL in local-lab/.env}
+    networks: [lab]
+    restart: unless-stopped
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: loadtest
+      POSTGRES_USER: loadtest
+      POSTGRES_PASSWORD: ${LAB_DB_PASSWORD:?Copy local-lab/.env.example to local-lab/.env and set LAB_DB_PASSWORD}
+    ports: ["127.0.0.1:5433:5432"]
+    volumes: [postgres-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U loadtest -d loadtest"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [lab]
+  elasticsearch:
+    profiles: ["observability"]
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.19.22
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ports: ["127.0.0.1:9200:9200"]
+    volumes: [elastic-data:/usr/share/elasticsearch/data]
+    networks: [lab]
+  kibana:
+    profiles: ["observability"]
+    image: docker.elastic.co/kibana/kibana:8.19.22
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+    depends_on: [elasticsearch]
+    ports: ["127.0.0.1:5601:5601"]
+    networks: [lab]
+  filebeat:
+    profiles: ["observability"]
+    image: docker.elastic.co/beats/filebeat:8.19.22
+    user: root
+    command: ["filebeat", "-e", "--strict.perms=false"]
+    volumes:
+      - ./filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - order-logs:/var/log/loadtest:ro
+      - filebeat-data:/usr/share/filebeat/data
+    depends_on: [elasticsearch]
+    networks: [lab]
+networks:
+  lab:
+    name: loadtest-lab
+volumes:
+  jenkins-home:
+  postgres-data:
+  order-logs:
+    name: loadtest-order-logs
+  elastic-data:
+  filebeat-data:

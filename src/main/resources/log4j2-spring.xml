@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="WARN">
+  <Properties>
+    <Property name="LOG_DIR">${env:LOG_DIR:-logs}</Property>
+    <Property name="SERVICE_NAME">${env:SERVICE_NAME:-order-service}</Property>
+  </Properties>
+  <Appenders>
+    <Console name="Console" target="SYSTEM_OUT">
+      <PatternLayout pattern="%d{ISO8601} %-5p [%t] %c{1.} requestId=%X{requestId} - %m%n"/>
+    </Console>
+    <RollingFile name="JsonFile" fileName="${LOG_DIR}/app.json" filePattern="${LOG_DIR}/app-%d{yyyy-MM-dd}-%i.json.gz">
+      <JsonLayout compact="true" eventEol="true" properties="true"/>
+      <Policies><TimeBasedTriggeringPolicy/><SizeBasedTriggeringPolicy size="50 MB"/></Policies>
+      <DefaultRolloverStrategy max="7"/>
+    </RollingFile>
+  </Appenders>
+  <Loggers>
+    <Root level="INFO"><AppenderRef ref="Console"/><AppenderRef ref="JsonFile"/></Root>
+  </Loggers>
+</Configuration>

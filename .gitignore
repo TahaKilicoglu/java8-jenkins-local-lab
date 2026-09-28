@@ -1,0 +1,9 @@
+/target/
+/logs/
+/.idea/
+/.vscode/
+*.iml
+*.log
+.env
+*.zip
+local-lab/.env

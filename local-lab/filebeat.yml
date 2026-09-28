@@ -1,0 +1,20 @@
+filebeat.inputs:
+  - type: filestream
+    id: order-json-log
+    enabled: true
+    paths: ["/var/log/loadtest/app.json", "/var/log/loadtest/app-*.json"]
+    fields_under_root: true
+    fields:
+      service.name: order-service
+    processors:
+      - decode_json_fields:
+          fields: ["message"]
+          target: ""
+          overwrite_keys: false
+          add_error_key: true
+output.elasticsearch:
+  hosts: ["http://elasticsearch:9200"]
+  index: "order-service-%{+yyyy.MM.dd}"
+setup.ilm.enabled: false
+setup.template.name: order-service
+setup.template.pattern: "order-service-*"
